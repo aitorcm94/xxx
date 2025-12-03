@@ -1,0 +1,79 @@
+# Alpine-based ultra-minimal build
+FROM python:3.11-alpine as alpine-builder
+
+# Install build dependencies for Alpine
+RUN apk add --no-cache --virtual .build-deps \
+    gcc \
+    g++ \
+    musl-dev \
+    linux-headers \
+    libffi-dev \
+    jpeg-dev \
+    zlib-dev \
+    freetype-dev \
+    lcms2-dev \
+    openjpeg-dev \
+    tiff-dev \
+    tk-dev \
+    tcl-dev \
+    ca-certificates \
+    openssl \
+    libressl
+
+WORKDIR /app
+
+# Upgrade pip first (pip 25.2 has known fixes)
+RUN python -m ensurepip && pip install --upgrade pip
+
+# Install CPU-only PyTorch with retry & timeout logic
+RUN for i in 1 2 3; do \
+    pip install --user --no-cache-dir --default-timeout=100 torch==2.3.1+cpu -f https://download.pytorch.org/whl/cpu/torch_stable.html && break || sleep 5; \
+    done
+
+# Copy and install other Python requirements
+COPY requirements.txt .
+
+RUN for i in 1 2 3; do \
+    pip install --user --no-cache-dir --default-timeout=100 -r requirements.txt && break || sleep 5; \
+    done
+
+# Clean up build artifacts and unnecessary files
+RUN find /root/.local -name "*.py[co]" -delete && \
+    find /root/.local -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "test" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "*.so" -exec strip {} \; 2>/dev/null || true
+
+# Ultra-minimal runtime stage
+FROM python:3.11-alpine
+
+# Install only essential runtime libraries
+RUN apk add --no-cache \
+    libstdc++ \
+    libgomp \
+    libjpeg-turbo \
+    zlib \
+    freetype \
+    lcms2 \
+    openjpeg \
+    tiff \
+    ca-certificates && \
+    rm -rf /var/cache/apk/*
+
+# Copy Python packages from builder
+COPY --from=alpine-builder /root/.local /root/.local
+
+# Set environment
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy application code
+COPY app/ /app/
+
+WORKDIR /app
+
+# Create non-root user
+RUN adduser -D -u 1000 parser && chown -R parser:parser /app
+USER parser
+
+ENTRYPOINT ["python", "-m", "app.main"]

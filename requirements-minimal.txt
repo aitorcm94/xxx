@@ -1,0 +1,16 @@
+# Ultra-minimal dependencies - exclude all ML/AI heavy packages
+azure-storage-blob==12.19.1
+azure-cosmos==4.7.0
+azure-identity==1.16.0
+pydantic==2.7.1
+structlog==24.1.0
+click==8.1.7
+
+# Lightweight document parsing alternatives (choose one):
+# Option 1: Basic text extraction
+python-docx==1.1.0
+PyPDF2==3.0.1
+
+# Option 2: If docling is absolutely required, try to exclude optional ML deps
+# docling==2.48.0 --no-deps
+# Then manually add only essential docling dependencies

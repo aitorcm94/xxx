@@ -1,0 +1,72 @@
+# Ultra-optimized build - targeting <3GB final size
+FROM python:3.11-slim as ultra-builder
+
+# Install minimal build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install only the absolute minimum PyTorch CPU version
+RUN pip install --user --no-cache-dir \
+    torch==2.5.0+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Copy minimal requirements and install
+COPY requirements-minimal.txt requirements.txt
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Aggressive cleanup - remove everything non-essential
+RUN find /root/.local -name "*.pyc" -delete && \
+    find /root/.local -name "*.pyo" -delete && \
+    find /root/.local -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "test" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /root/.local -name "*.md" -delete && \
+    find /root/.local -name "*.txt" -delete && \
+    find /root/.local -name "LICENSE*" -delete && \
+    find /root/.local -name "NOTICE*" -delete && \
+    find /root/.local -name "*.so" -exec strip {} \; 2>/dev/null || true && \
+    find /root/.local -name "*.whl" -delete && \
+    # Remove torch's large model files and documentation
+    rm -rf /root/.local/lib/python3.11/site-packages/torch/test* && \
+    rm -rf /root/.local/lib/python3.11/site-packages/torch/include && \
+    rm -rf /root/.local/lib/python3.11/site-packages/torch/share && \
+    # Remove other package documentation and examples
+    rm -rf /root/.local/share/doc* && \
+    rm -rf /root/.local/share/man*
+
+# Ultra-minimal runtime stage
+FROM python:3.11-slim
+
+# Install only critical runtime libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/* \
+    && rm -rf /usr/share/doc/* \
+    && rm -rf /usr/share/man/* \
+    && rm -rf /usr/share/locale/*
+
+# Copy only the cleaned Python packages
+COPY --from=ultra-builder /root/.local /root/.local
+
+# Set minimal environment
+ENV PATH="/root/.local/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8
+
+# Copy application code
+COPY app/ /app/
+
+WORKDIR /app
+
+# Create minimal non-root user
+RUN useradd -M -u 1000 parser && chown -R parser:parser /app
+USER parser
+
+ENTRYPOINT ["python", "-m", "app.main"]

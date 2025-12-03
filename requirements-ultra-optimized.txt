@@ -1,0 +1,49 @@
+# Minimal requirements with explicit exclusions to reduce size
+
+# Core Azure dependencies
+azure-storage-blob==12.19.1
+azure-cosmos==4.7.0
+azure-identity==1.16.0
+
+# Core app dependencies
+pydantic==2.7.1
+structlog==24.1.0
+click==8.1.7
+
+# Document processing - trying minimal docling
+docling-core==2.45.0
+docling-parse==4.2.3
+pypdfium2==4.30.0
+python-docx==1.2.0
+beautifulsoup4==4.13.5
+lxml==5.4.0
+pillow==11.3.0
+
+# Exclude heavy ML dependencies that docling might pull in
+# torch will be installed separately in Dockerfile
+# We'll try to use docling without the full ML stack
+
+
+
+# # ⚙️ Core Azure dependencies
+# # These can be heavy (msal, cryptography) — consider alternatives if possible
+# azure-storage-blob==12.19.1      # ~13 MB+
+# azure-cosmos==4.7.0              # ~10 MB+
+# azure-identity==1.16.0           # ⚠️ pulls in msal + cryptography
+
+# # ✅ Core app dependencies
+# pydantic==2.7.1
+# structlog==24.1.0
+# click==8.1.7
+
+# # 🧾 Document processing stack (attempting minimal setup)
+# # Consider `--no-deps` for docling if ML deps sneak in
+# docling-core==2.45.0
+# docling-parse==4.2.3
+
+# # 📚 Document parsing libraries
+# pypdfium2==4.30.0                # Lightweight alternative to PyMuPDF / PyPDF2
+# python-docx==1.2.0               # ⚠️ Large if only extracting text — consider docx2txt?
+# beautifulsoup4==4.13.5
+# lxml==5.4.0                      # ⚠️ Heavy; replace with html.parser if not using XML/XPath
+# pillow==11.3.0                   # ⚠️ Could try pillow-simd for size/speed tradeoff
